@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Disaster Supply Chain Optimizer</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet (interactive map from pro version) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --bg:       #0a0e1a;
+      --surface:  #111827;
+      --border:   #1e2d40;
+      --accent:   #f97316;
+      --accent2:  #3b82f6;
+      --critical: #ef4444;
+      --high:     #f97316;
+      --medium:   #eab308;
+      --low:      #22c55e;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .display-font { font-family: 'Syne', sans-serif; }
+
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      top: -50%; right: -10%;
+      width: 40%; height: 200%;
+      background: radial-gradient(ellipse, rgba(249,115,22,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      position: relative;
+      z-index: 1;
+    }
+    .card-accent { border-top: 3px solid var(--accent); }
+
+    input, select {
+      background: #0d1525;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      width: 100%;
+      outline: none;
+      transition: border-color .2s;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent2);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white; border: none; border-radius: 8px;
+      padding: 10px 20px; font-weight: 600; cursor: pointer;
+      transition: all .2s; font-family: 'DM Sans', sans-serif;
+    }
+    .btn-primary:hover { background: #ea6c0a; transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 20px; font-weight: 500; cursor: pointer;
+      transition: all .2s; font-family: 'DM Sans', sans-serif;
+    }
+    .btn-secondary:hover { border-color: var(--accent2); color: #93c5fd; }
+
+    .btn-simulate {
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      color: white; border: none; border-radius: 8px;
+      padding: 10px 22px; font-weight: 600; cursor: pointer;
+      transition: all .2s; font-family: 'DM Sans', sans-serif;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .btn-simulate:hover { opacity: .9; transform: translateY(-1px); }
+
+    .btn-danger {
+      background: rgba(239,68,68,.1); color: #f87171;
+      border: 1px solid rgba(239,68,68,.25); border-radius: 6px;
+      padding: 4px 10px; font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: all .2s; font-family: 'DM Sans', sans-serif;
+    }
+    .btn-danger:hover { background: rgba(239,68,68,.2); }
+
+    .risk-critical { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .risk-high     { background: rgba(249,115,22,.15); color: #fb923c; border: 1px solid rgba(249,115,22,.3); }
+    .risk-medium   { background: rgba(234,179,8,.15);  color: #facc15; border: 1px solid rgba(234,179,8,.3); }
+    .risk-low      { background: rgba(34,197,94,.15);  color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+    .risk-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; letter-spacing: .5px;
+    }
+
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 20px;
+      position: relative; overflow: hidden;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .stat-card.c1::before { background: linear-gradient(90deg, #ef4444, #f97316); }
+    .stat-card.c2::before { background: linear-gradient(90deg, #f97316, #eab308); }
+    .stat-card.c3::before { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+    .stat-card.c4::before { background: linear-gradient(90deg, #22c55e, #14b8a6); }
+
+    .sev-bar {
+      height: 6px; border-radius: 3px;
+      background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+      margin-top: 4px;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 10px 14px; font-size: 11px;
+      font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    td { padding: 12px 14px; border-bottom: 1px solid rgba(30,45,64,.5); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    .prog-bar { height: 5px; border-radius: 3px; background: #1e2d40; overflow: hidden; margin-top: 4px; }
+    .prog-fill { height: 100%; border-radius: 3px; transition: width .5s; }
+
+    #mapCanvas { border-radius: 10px; border: 1px solid var(--border); }
+
+    /* Leaflet map */
+    #leafletMap {
+      height: 280px; width: 100%; border-radius: 10px;
+      border: 1px solid var(--border); z-index: 1;
+    }
+    .leaflet-container { background: #0d1525 !important; }
+
+    .map-tab {
+      padding: 6px 14px; border-radius: 6px; font-size: 12px;
+      font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+      transition: all .2s; color: var(--muted);
+    }
+    .map-tab.active { background: var(--accent2); color: white; border-color: var(--accent2); }
+
+    .ai-box {
+      background: linear-gradient(135deg, rgba(59,130,246,.08), rgba(139,92,246,.08));
+      border: 1px solid rgba(59,130,246,.2); border-radius: 12px;
+      padding: 20px; position: relative;
+    }
+    .ai-box::before {
+      content: '✦ AI'; position: absolute; top: -10px; left: 20px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white; font-size: 10px; font-weight: 700;
+      padding: 2px 10px; border-radius: 999px; letter-spacing: 1px;
+    }
+    .ai-line { border-left: 3px solid #3b82f6; padding-left: 12px; margin: 8px 0; line-height: 1.6; }
+
+    #loadingOverlay {
+      position: fixed; inset: 0; background: rgba(10,14,26,.85);
+      z-index: 9999; display: none; align-items: center;
+      justify-content: center; flex-direction: column; gap: 16px;
+    }
+    .spinner {
+      width: 44px; height: 44px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .fade-in { animation: fadeIn .4s ease forwards; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; margin-right: 6px;
+      animation: pulseDot 2s infinite;
+    }
+    .pulse-dot.red  { background: #ef4444; }
+    .pulse-dot.org  { background: #f97316; }
+    @keyframes pulseDot {
+      0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.4); }
+      70%  { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    }
+
+    .db-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 6px; font-size: 11px;
+      font-weight: 600; letter-spacing: .4px;
+    }
+    .db-badge.on  { background: rgba(34,197,94,.1); color: #4ade80; border: 1px solid rgba(34,197,94,.2); }
+    .db-badge.off { background: rgba(100,116,139,.1); color: var(--muted); border: 1px solid var(--border); }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    label { font-size: 12px; color: var(--muted); font-weight: 500; display: block; margin-bottom: 4px; }
+    .section-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
+    .tag { display:inline-block; background:#1e2d40; color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:11px; margin-right:4px; }
+
+    .tooltip {
+      position: relative;
+    }
+    .tooltip::after {
+      content: attr(data-tip);
+      position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+      background: #1e2d40; color: var(--text); font-size: 11px;
+      padding: 4px 8px; border-radius: 5px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .tooltip:hover::after { opacity: 1; }
+
+    .notification {
+      position: fixed; top: 24px; right: 24px; z-index: 9998;
+      padding: 12px 20px; border-radius: 10px; font-size: 13px;
+      font-weight: 600; display: none; align-items: center; gap: 10px;
+      animation: slideIn .3s ease;
+    }
+    .notification.success { background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3); color: #4ade80; }
+    .notification.error   { background: rgba(239,68,68,.15);  border: 1px solid rgba(239,68,68,.3);  color: #f87171; }
+    @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:none; } }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <p style="color:var(--muted);font-size:13px;">Processing optimization…</p>
+</div>
+
+<!-- Notification toast -->
+<div id="notification" class="notification"></div>
+
+<!-- ══════ HEADER ══════ -->
+<header class="px-6 py-5" style="position:relative;z-index:2">
+  <div class="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <div class="display-font text-2xl font-extrabold tracking-tight" style="line-height:1.1">
+        <span style="color:var(--accent)">⚡</span> DISASTER
+        <span style="color:var(--accent2)">SUPPLY</span> OPTIMIZER
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin-top:3px">AI-Powered Relief Logistics · Integrated Edition</p>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <span id="dbStatusBadge" class="db-badge off" title="Database persistence status">
+        <span>⬤</span> <span id="dbStatusText">DB: Offline</span>
+      </span>
+      <button class="btn-simulate" onclick="simulateDisaster()">
+        <span>🌪</span> Simulate Disaster
+      </button>
+      <button class="btn-primary" onclick="runOptimization()">
+        ▶ Run Optimizer
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ══════ MAIN ══════ -->
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+  <!-- Summary stats (hidden until results) -->
+  <div id="summaryRow" class="grid grid-cols-4 gap-4 hidden fade-in">
+    <div class="stat-card c1">
+      <p style="color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Zones</p>
+      <p id="statZones" class="display-font text-3xl font-bold mt-1">0</p>
+    </div>
+    <div class="stat-card c2">
+      <p style="color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Critical</p>
+      <p id="statCritical" class="display-font text-3xl font-bold mt-1" style="color:#ef4444">0</p>
+    </div>
+    <div class="stat-card c3">
+      <p style="color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">High Risk</p>
+      <p id="statHigh" class="display-font text-3xl font-bold mt-1" style="color:#f97316">0</p>
+    </div>
+    <div class="stat-card c4">
+      <p style="color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Supply Gap</p>
+      <p id="statGap" class="display-font text-3xl font-bold mt-1" style="color:#22c55e">0</p>
+    </div>
+  </div>
+
+  <!-- ── INPUT GRID ── -->
+  <div class="grid grid-cols-3 gap-6">
+
+    <!-- ZONES -->
+    <div class="card card-accent col-span-1 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="section-title">Affected Zones</h2>
+        <div class="flex gap-2">
+          <button id="loadDbZonesBtn" onclick="loadZonesFromDB()" class="btn-secondary text-xs px-3 py-1 hidden tooltip" data-tip="Load from DB">⬇ DB</button>
+          <button onclick="addZone()" class="btn-secondary text-xs px-3 py-1">+ Add</button>
+        </div>
+      </div>
+      <div id="zonesContainer" class="space-y-3 max-h-96 overflow-y-auto pr-1"></div>
+    </div>
+
+    <!-- SUPPLIES + DEPOTS -->
+    <div class="col-span-1 space-y-4">
+      <div class="card p-5">
+        <h2 class="section-title mb-4">Available Supplies</h2>
+        <div class="space-y-3">
+          <div>
+            <label>🍚 Food (kg)</label>
+            <input type="number" id="supplyFood" placeholder="e.g. 500000" min="0" />
+          </div>
+          <div>
+            <label>💧 Water (liters)</label>
+            <input type="number" id="supplyWater" placeholder="e.g. 300000" min="0" />
+          </div>
+          <div>
+            <label>💊 Medicines (units)</label>
+            <input type="number" id="supplyMeds" placeholder="e.g. 50000" min="0" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="section-title">Depot Locations</h2>
+          <button onclick="addDepot()" class="btn-secondary text-xs px-3 py-1">+ Add</button>
+        </div>
+        <div id="depotsContainer" class="space-y-2 max-h-52 overflow-y-auto pr-1"></div>
+      </div>
+    </div>
+
+    <!-- MAP PANEL (dual: Canvas + Leaflet) -->
+    <div class="card p-5 col-span-1">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="section-title">Zone Map</h2>
+        <div class="flex gap-2">
+          <button class="map-tab active" id="tabCanvas" onclick="switchMap('canvas')">Grid</button>
+          <button class="map-tab" id="tabLeaflet" onclick="switchMap('leaflet')">Live Map</button>
+        </div>
+      </div>
+
+      <!-- Canvas map (v1 logic) -->
+      <div id="canvasMapWrap">
+        <p style="color:var(--muted);font-size:12px;margin-bottom:8px">Visual layout (X/Y 0–100 grid)</p>
+        <canvas id="mapCanvas" width="280" height="280"></canvas>
+        <p style="color:var(--muted);font-size:11px;margin-top:8px">
+          <span style="color:#3b82f6">■</span> Depots &nbsp;
+          <span style="color:#ef4444">●</span> Critical &nbsp;
+          <span style="color:#f97316">●</span> High &nbsp;
+          <span style="color:#eab308">●</span> Medium &nbsp;
+          <span style="color:#22c55e">●</span> Low/Input
+        </p>
+      </div>
+
+      <!-- Leaflet map (v2 feature) -->
+      <div id="leafletMapWrap" style="display:none">
+        <p style="color:var(--muted);font-size:12px;margin-bottom:8px">Interactive map — click to place zones & depots</p>
+        <div id="leafletMap"></div>
+        <p style="color:var(--muted);font-size:11px;margin-top:6px">Click map to set Lat/Lng for a new zone. Requires database to save.</p>
+      </div>
+    </div>
+
+  </div><!-- /input grid -->
+
+  <!-- ── RESULTS ── -->
+  <div id="resultsSection" class="space-y-6 hidden">
+
+    <!-- AI Suggestions -->
+    <div id="aiBox" class="ai-box">
+      <h3 class="display-font text-base font-bold mb-3" style="padding-top:4px">Optimization Recommendations</h3>
+      <div id="aiContent"></div>
+      <p id="aiSource" style="color:var(--muted);font-size:11px;margin-top:12px"></p>
+    </div>
+
+    <!-- Allocation Table -->
+    <div class="card p-5">
+      <h2 class="section-title mb-4">Supply Allocation per Zone</h2>
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Zone</th>
+              <th>Population</th>
+              <th>Severity</th>
+              <th>Food (kg)</th>
+              <th>Water (L)</th>
+              <th>Medicines</th>
+              <th>Risk</th>
+              <th>Alerts</th>
+            </tr>
+          </thead>
+          <tbody id="allocationTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Routes + Shortages -->
+    <div class="grid grid-cols-2 gap-6">
+      <div class="card p-5">
+        <h2 class="section-title mb-4">Route Recommendations</h2>
+        <div id="routesList" class="space-y-2"></div>
+      </div>
+      <div class="card p-5">
+        <h2 class="section-title mb-4">⚠ Shortage Alerts</h2>
+        <div id="alertsList" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- Export button -->
+    <div class="flex justify-end">
+      <button onclick="exportResults()" class="btn-secondary flex items-center gap-2">
+        ⬇ Export JSON
+      </button>
+    </div>
+
+  </div><!-- /results -->
+
+</main>
+
+<!-- ══════ FOOTER ══════ -->
+<footer class="text-center py-6 mt-4" style="color:var(--muted);font-size:12px;border-top:1px solid var(--border)">
+  AI Disaster Supply Chain Optimizer · Integrated Edition · Flask + Leaflet + Tailwind + Hugging Face
+</footer>
+
+
+<!-- ══════ JAVASCRIPT ══════ -->
+<script>
+/* ── STATE ── */
+let zones            = [];
+let depots           = [];
+let zoneCoords       = [];
+let depotCoords      = [];
+let zoneLatlngs      = [];  // lat/lng for Leaflet (from pro version)
+let lastAllocations  = [];
+let lastRoutes       = [];
+let lastResultsData  = null;
+
+let leafletMap       = null;
+let leafletMarkers   = [];
+let selectedLatlng   = null;
+let pendingZoneId    = null;   // zone slot awaiting a map click
+let useDbEnabled     = false;
+let currentMapMode   = 'canvas';
+
+/* ── CHECK SERVER STATUS ── */
+async function checkStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    useDbEnabled = data.database;
+    const badge = document.getElementById('dbStatusBadge');
+    const text  = document.getElementById('dbStatusText');
+    if (useDbEnabled) {
+      badge.className = 'db-badge on';
+      text.textContent = 'DB: Online';
+      document.getElementById('loadDbZonesBtn').classList.remove('hidden');
+    }
+  } catch(e) {}
+}
+
+/* ── NOTIFICATIONS ── */
+function notify(msg, type = 'success') {
+  const el = document.getElementById('notification');
+  el.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+  el.className = `notification ${type}`;
+  el.style.display = 'flex';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+/* ── ZONE MANAGEMENT ── */
+function addZone(data = null) {
+  const id = zones.length;
+  const z  = data || { name: '', population: '', severity: 5 };
+  const c  = data?.coord || { x: Math.floor(Math.random()*80)+10, y: Math.floor(Math.random()*80)+10 };
+  const ll = data?.latlng || null;
+
+  zones.push(z);
+  zoneCoords.push(c);
+  zoneLatlngs.push(ll);
+
+  const el = document.createElement('div');
+  el.className = 'p-3 rounded-lg space-y-2 fade-in';
+  el.style.cssText = 'background:#0d1525;border:1px solid var(--border)';
+  el.dataset.zoneId = id;
+  el.innerHTML = `
+    <div class="flex items-center justify-between">
+      <span style="color:var(--muted);font-size:11px;font-weight:600">ZONE ${id+1}</span>
+      <div class="flex gap-2 items-center">
+        ${useDbEnabled ? `<button onclick="saveZoneToDB(${id})" class="btn-secondary text-xs px-2 py-0.5" style="font-size:10px">💾 Save</button>` : ''}
+        <button onclick="removeZone(${id})" style="color:var(--muted);font-size:18px;cursor:pointer;background:none;border:none;">&times;</button>
+      </div>
+    </div>
+    <input type="text" placeholder="Zone name" value="${z.name || ''}" oninput="zones[${id}].name=this.value" />
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label>Population</label>
+        <input type="number" placeholder="e.g. 25000" value="${z.population || ''}" min="0"
+          oninput="zones[${id}].population=parseInt(this.value)||0" />
+      </div>
+      <div>
+        <label>Severity (1-10)</label>
+        <input type="number" placeholder="1-10" value="${z.severity || 5}" min="1" max="10"
+          oninput="zones[${id}].severity=Math.min(10,Math.max(1,parseInt(this.value)||1));updateSevBar(${id},this)"
+          id="sevInput_${id}" />
+        <div class="sev-bar" id="sevBar_${id}">
+          <div style="height:100%;width:${(z.severity||5)*10}%;background:${sevColor(z.severity||5)};border-radius:3px;transition:width .3s"></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label>Map X (0-100)</label>
+        <input type="number" value="${c.x}" min="0" max="100"
+          oninput="zoneCoords[${id}].x=parseInt(this.value)||0;drawMap()" />
+      </div>
+      <div>
+        <label>Map Y (0-100)</label>
+        <input type="number" value="${c.y}" min="0" max="100"
+          oninput="zoneCoords[${id}].y=parseInt(this.value)||0;drawMap()" />
+      </div>
+    </div>
+    ${ll ? `<p style="color:#3b82f6;font-size:11px">📍 ${parseFloat(ll.lat).toFixed(4)}, ${parseFloat(ll.lng).toFixed(4)}</p>` : `
+    <button onclick="pickLatlng(${id})" class="btn-secondary text-xs px-2 py-1 w-full" style="font-size:11px">
+      📍 Pick from Live Map
+    </button>`}
+  `;
+  document.getElementById('zonesContainer').appendChild(el);
+  drawMap();
+  if (leafletMap && ll) addLeafletZoneMarker(id, z, ll);
+}
+
+function removeZone(id) {
+  zones[id] = null;
+  zoneCoords[id] = null;
+  zoneLatlngs[id] = null;
+  document.querySelector(`[data-zone-id="${id}"]`)?.remove();
+  drawMap();
+}
+
+function updateSevBar(id, input) {
+  const val = parseInt(input.value) || 1;
+  const bar = document.getElementById(`sevBar_${id}`);
+  if (bar) bar.innerHTML = `<div style="height:100%;width:${val*10}%;background:${sevColor(val)};border-radius:3px;transition:width .3s"></div>`;
+}
+
+function sevColor(v) {
+  if (v >= 8) return '#ef4444';
+  if (v >= 6) return '#f97316';
+  if (v >= 4) return '#eab308';
+  return '#22c55e';
+}
+
+/* ── DEPOT MANAGEMENT ── */
+function addDepot(data = null) {
+  const id = depots.length;
+  const d  = data || { name: '', location: '' };
+  const c  = data?.coord || { x: Math.floor(Math.random()*80)+10, y: Math.floor(Math.random()*80)+10 };
+
+  depots.push(d);
+  depotCoords.push(c);
+
+  const el = document.createElement('div');
+  el.className = 'p-3 rounded-lg fade-in';
+  el.style.cssText = 'background:#0d1525;border:1px solid var(--border)';
+  el.dataset.depotId = id;
+  el.innerHTML = `
+    <div class="flex items-center justify-between mb-2">
+      <span style="color:#3b82f6;font-size:11px;font-weight:600">DEPOT ${id+1}</span>
+      <button onclick="removeDepot(${id})" style="color:var(--muted);font-size:18px;cursor:pointer;background:none;border:none;">&times;</button>
+    </div>
+    <input type="text" placeholder="Depot name" value="${d.name || ''}" oninput="depots[${id}].name=this.value" class="mb-2" />
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label>Map X</label>
+        <input type="number" value="${c.x}" min="0" max="100"
+          oninput="depotCoords[${id}].x=parseInt(this.value)||0;drawMap()" />
+      </div>
+      <div>
+        <label>Map Y</label>
+        <input type="number" value="${c.y}" min="0" max="100"
+          oninput="depotCoords[${id}].y=parseInt(this.value)||0;drawMap()" />
+      </div>
+    </div>
+  `;
+  document.getElementById('depotsContainer').appendChild(el);
+  drawMap();
+}
+
+function removeDepot(id) {
+  depots[id] = null;
+  depotCoords[id] = null;
+  document.querySelector(`[data-depot-id="${id}"]`)?.remove();
+  drawMap();
+}
+
+/* ── DATABASE OPERATIONS (from pro version) ── */
+async function saveZoneToDB(id) {
+  const z  = zones[id];
+  const ll = zoneLatlngs[id];
+  if (!z || !z.name || !z.population) { notify('Fill in zone name and population first', 'error'); return; }
+  if (!ll) { notify('Pick a location on the Live Map first', 'error'); return; }
+
+  try {
+    const res = await fetch('/api/zones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: z.name, population: z.population, severity: z.severity,
+        latitude: ll.lat, longitude: ll.lng,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) notify(`Zone "${z.name}" saved to database`);
+    else notify(data.error || 'Save failed', 'error');
+  } catch(e) {
+    notify('Database error: ' + e.message, 'error');
+  }
+}
+
+async function loadZonesFromDB() {
+  try {
+    const res   = await fetch('/api/zones');
+    const zList = await res.json();
+    if (!res.ok) { notify(zList.error || 'Could not load zones', 'error'); return; }
+    if (!zList.length) { notify('No zones found in database'); return; }
+
+    zList.forEach(z => addZone({
+      name: z.name, population: z.population, severity: z.severity,
+      latlng: { lat: z.lat, lng: z.lng },
+    }));
+    notify(`Loaded ${zList.length} zones from database`);
+    if (currentMapMode === 'leaflet') refreshLeafletMarkers();
+  } catch(e) {
+    notify('Failed to load zones: ' + e.message, 'error');
+  }
+}
+
+/* ── SIMULATE DISASTER ── */
+async function simulateDisaster() {
+  try {
+    const res  = await fetch('/api/simulate');
+    const data = await res.json();
+
+    zones = []; zoneCoords = []; zoneLatlngs = []; depots = []; depotCoords = [];
+    document.getElementById('zonesContainer').innerHTML = '';
+    document.getElementById('depotsContainer').innerHTML = '';
+
+    data.zones.forEach((z, i) => addZone({
+      ...z,
+      coord:  data.zone_coords[i],
+      latlng: data.zone_latlng?.[i] || null,
+    }));
+
+    document.getElementById('supplyFood').value  = data.supplies.food.quantity;
+    document.getElementById('supplyWater').value = data.supplies.water.quantity;
+    document.getElementById('supplyMeds').value  = data.supplies.medicines.quantity;
+
+    data.depots.forEach((d, i) => addDepot({
+      name: d.name, location: d.location,
+      coord: { x: d.x, y: d.y },
+    }));
+
+    drawMap();
+    if (currentMapMode === 'leaflet') refreshLeafletMarkers();
+    notify('Disaster scenario loaded');
+  } catch(e) {
+    notify('Could not load simulation data', 'error');
+  }
+}
+
+/* ── CANVAS MAP (v1 original logic) ── */
+function drawMap() {
+  const canvas = document.getElementById('mapCanvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = 20;
+  const scaleX = x => pad + (x / 100) * (W - 2*pad);
+  const scaleY = y => H - pad - (y / 100) * (H - 2*pad);
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0d1525';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(30,45,64,.6)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const gx = pad + (i/10)*(W-2*pad);
+    const gy = pad + (i/10)*(H-2*pad);
+    ctx.beginPath(); ctx.moveTo(gx, pad); ctx.lineTo(gx, H-pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(W-pad, gy); ctx.stroke();
+  }
+
+  const riskColor = { CRITICAL: '#ef4444', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e' };
+
+  zones.forEach((z, i) => {
+    if (!z) return;
+    const zc    = zoneCoords[i];
+    const route = lastRoutes.find(r => r.zone === z.name);
+    if (route) {
+      const di = depots.findIndex(d => d && d.name === route.depot);
+      if (di >= 0 && depotCoords[di]) {
+        const dc = depotCoords[di];
+        ctx.beginPath();
+        ctx.moveTo(scaleX(zc.x), scaleY(zc.y));
+        ctx.lineTo(scaleX(dc.x), scaleY(dc.y));
+        ctx.strokeStyle = 'rgba(59,130,246,.25)';
+        ctx.setLineDash([4,4]);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  });
+
+  depots.forEach((d, i) => {
+    if (!d) return;
+    const c = depotCoords[i];
+    if (!c) return;
+    const x = scaleX(c.x), y = scaleY(c.y);
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillRect(x-7, y-7, 14, 14);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px DM Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText('D', x, y+3);
+    ctx.fillStyle = '#93c5fd';
+    ctx.font = '9px DM Sans';
+    ctx.fillText(d.name?.split(' ')[1] || '', x, y+15);
+  });
+
+  zones.forEach((z, i) => {
+    if (!z) return;
+    const c = zoneCoords[i];
+    if (!c) return;
+    const x = scaleX(c.x), y = scaleY(c.y);
+    const alloc = lastAllocations.find(a => a.zone === z.name);
+    const col   = alloc ? (riskColor[alloc.risk_level] || '#22c55e') : '#22c55e';
+
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, 18);
+    grad.addColorStop(0, col + '55');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI*2); ctx.fill();
+
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 7px DM Sans'; ctx.textAlign = 'center';
+    ctx.fillText(i+1, x, y+2);
+    ctx.fillStyle = '#e2e8f0'; ctx.font = '9px DM Sans';
+    ctx.fillText(z.name?.split(' ')[0] || '', x, y+18);
+  });
+}
+
+/* ── LEAFLET MAP (v2 feature) ── */
+function initLeafletMap() {
+  if (leafletMap) return;
+  leafletMap = L.map('leafletMap').setView([19.076, 72.877], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+  }).addTo(leafletMap);
+
+  leafletMap.on('click', function(e) {
+    selectedLatlng = e.latlng;
+    if (pendingZoneId !== null) {
+      zoneLatlngs[pendingZoneId] = { lat: e.latlng.lat, lng: e.latlng.lng };
+      addLeafletZoneMarker(pendingZoneId, zones[pendingZoneId], e.latlng);
+      // Update the zone card label
+      const card = document.querySelector(`[data-zone-id="${pendingZoneId}"]`);
+      if (card) {
+        const pickBtn = card.querySelector('button[onclick^="pickLatlng"]');
+        if (pickBtn) pickBtn.outerHTML = `<p style="color:#3b82f6;font-size:11px">📍 ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}</p>`;
+      }
+      pendingZoneId = null;
+      notify('Location set on map');
+    }
+  });
+
+  refreshLeafletMarkers();
+}
+
+function addLeafletZoneMarker(id, z, latlng) {
+  if (!leafletMap || !latlng) return;
+  const alloc = lastAllocations.find(a => a.zone === z?.name);
+  const colors = { CRITICAL: '#ef4444', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e', default: '#3b82f6' };
+  const col = alloc ? colors[alloc.risk_level] : colors.default;
+
+  const icon = L.divIcon({
+    html: `<div style="width:20px;height:20px;border-radius:50%;background:${col};border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white">${id+1}</div>`,
+    className: '',
+    iconSize: [20,20],
+    iconAnchor: [10,10],
+  });
+
+  const marker = L.marker([latlng.lat, latlng.lng], { icon })
+    .addTo(leafletMap)
+    .bindPopup(`<b>${z?.name || 'Zone ' + (id+1)}</b><br>Pop: ${(z?.population||0).toLocaleString()}<br>Severity: ${z?.severity||'?'}/10`);
+  leafletMarkers.push(marker);
+}
+
+function refreshLeafletMarkers() {
+  if (!leafletMap) return;
+  leafletMarkers.forEach(m => leafletMap.removeLayer(m));
+  leafletMarkers = [];
+  zones.forEach((z, i) => {
+    if (!z || !zoneLatlngs[i]) return;
+    addLeafletZoneMarker(i, z, zoneLatlngs[i]);
+  });
+}
+
+function pickLatlng(zoneId) {
+  switchMap('leaflet');
+  pendingZoneId = zoneId;
+  notify('Click on the map to set zone location');
+}
+
+function switchMap(mode) {
+  currentMapMode = mode;
+  document.getElementById('canvasMapWrap').style.display  = mode === 'canvas'  ? '' : 'none';
+  document.getElementById('leafletMapWrap').style.display = mode === 'leaflet' ? '' : 'none';
+  document.getElementById('tabCanvas').classList.toggle('active',  mode === 'canvas');
+  document.getElementById('tabLeaflet').classList.toggle('active', mode === 'leaflet');
+  if (mode === 'leaflet') {
+    initLeafletMap();
+    setTimeout(() => leafletMap?.invalidateSize(), 100);
+  }
+}
+
+/* ── RUN OPTIMIZATION ── */
+async function runOptimization() {
+  const validZones      = zones.filter(Boolean);
+  const validDepots     = depots.filter(Boolean);
+  const validZoneCoords = zoneCoords.filter(Boolean);
+
+  if (!validZones.length)  { notify('Please add at least one affected zone', 'error'); return; }
+  if (!validDepots.length) { notify('Please add at least one depot', 'error'); return; }
+
+  const food  = parseInt(document.getElementById('supplyFood').value)  || 0;
+  const water = parseInt(document.getElementById('supplyWater').value) || 0;
+  const meds  = parseInt(document.getElementById('supplyMeds').value)  || 0;
+  if (!food && !water && !meds) { notify('Please enter available supply quantities', 'error'); return; }
+
+  const depotsWithCoords = validDepots.map((d, i) => ({
+    ...d, x: depotCoords[i]?.x || 50, y: depotCoords[i]?.y || 50,
+  }));
+
+  showLoading(true);
+  try {
+    const res = await fetch('/api/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        zones: validZones,
+        supplies: {
+          food:      { quantity: food,  unit: 'kg' },
+          water:     { quantity: water, unit: 'liters' },
+          medicines: { quantity: meds,  unit: 'units' },
+        },
+        depots:      depotsWithCoords,
+        zone_coords: validZoneCoords,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.error) { notify('Error: ' + data.error, 'error'); return; }
+
+    lastAllocations = data.allocations;
+    lastRoutes      = data.routes;
+    lastResultsData = data;
+
+    renderResults(data);
+    drawMap();
+    if (currentMapMode === 'leaflet') refreshLeafletMarkers();
+
+    document.getElementById('resultsSection').classList.remove('hidden');
+    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+    notify('Optimization complete');
+  } catch(e) {
+    notify('Failed to connect to backend. Make sure Flask is running on port 5000.', 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+/* ── RENDER RESULTS ── */
+function renderResults(data) {
+  const { allocations, routes, suggestions, summary } = data;
+
+  document.getElementById('summaryRow').classList.remove('hidden');
+  document.getElementById('statZones').textContent    = summary.total_zones;
+  document.getElementById('statCritical').textContent = summary.critical_zones;
+  document.getElementById('statHigh').textContent     = summary.high_risk_zones;
+  document.getElementById('statGap').textContent      = summary.total_supply_gap.toLocaleString();
+
+  const lines = suggestions.text.split('\n').filter(l => l.trim());
+  document.getElementById('aiContent').innerHTML =
+    lines.map(l => `<div class="ai-line text-sm">${l}</div>`).join('');
+  document.getElementById('aiSource').textContent = `Source: ${suggestions.source}`;
+
+  const riskClass = { CRITICAL: 'risk-critical', HIGH: 'risk-high', MEDIUM: 'risk-medium', LOW: 'risk-low' };
+  const tbody = document.getElementById('allocationTableBody');
+  tbody.innerHTML = allocations.map(a => `
+    <tr class="fade-in">
+      <td class="font-medium" style="max-width:160px">${a.zone}</td>
+      <td>${a.population.toLocaleString()}</td>
+      <td><span style="color:${sevColor(a.severity)};font-weight:600">${a.severity}/10</span></td>
+      <td>
+        <div style="min-width:80px">
+          <span>${a.food_alloc.toLocaleString()}</span>
+          ${a.food_gap>0?`<span style="color:#ef4444;font-size:11px"> −${a.food_gap.toLocaleString()}</span>`:''}
+          <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,a.food_alloc/(a.food_alloc+a.food_gap||1)*100)}%;background:#f97316"></div></div>
+        </div>
+      </td>
+      <td>
+        <div style="min-width:80px">
+          <span>${a.water_alloc.toLocaleString()}</span>
+          ${a.water_gap>0?`<span style="color:#ef4444;font-size:11px"> −${a.water_gap.toLocaleString()}</span>`:''}
+          <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,a.water_alloc/(a.water_alloc+a.water_gap||1)*100)}%;background:#3b82f6"></div></div>
+        </div>
+      </td>
+      <td>
+        <div style="min-width:80px">
+          <span>${a.meds_alloc.toLocaleString()}</span>
+          ${a.meds_gap>0?`<span style="color:#ef4444;font-size:11px"> −${a.meds_gap.toLocaleString()}</span>`:''}
+          <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,a.meds_alloc/(a.meds_alloc+a.meds_gap||1)*100)}%;background:#8b5cf6"></div></div>
+        </div>
+      </td>
+      <td><span class="risk-badge ${riskClass[a.risk_level]}">${a.risk_level}</span></td>
+      <td style="max-width:180px;font-size:12px;color:var(--muted)">${a.alerts.join(', ')||'—'}</td>
+    </tr>
+  `).join('');
+
+  const routeList = document.getElementById('routesList');
+  routeList.innerHTML = routes.map((r, i) => `
+    <div class="flex items-center gap-3 p-3 rounded-lg fade-in" style="background:#0d1525;border:1px solid var(--border)">
+      <div style="width:28px;height:28px;border-radius:8px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#3b82f6;flex-shrink:0">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div class="font-medium text-sm truncate">${r.zone}</div>
+        <div style="color:var(--muted);font-size:11px">→ ${r.depot}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:600">${r.distance_km} km</div>
+        <div style="color:var(--muted);font-size:11px">~${r.estimated_hours}h</div>
+      </div>
+    </div>
+  `).join('');
+
+  const alertList  = document.getElementById('alertsList');
+  const alertItems = allocations.flatMap(a =>
+    a.alerts.map(msg => ({ zone: a.zone, msg, risk: a.risk_level }))
+  );
+  if (!alertItems.length) {
+    alertList.innerHTML = `<p style="color:#22c55e;font-size:13px">✓ No critical shortages detected.</p>`;
+  } else {
+    alertList.innerHTML = alertItems.map(item => `
+      <div class="p-3 rounded-lg fade-in" style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15)">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span class="pulse-dot ${item.risk==='CRITICAL'?'red':'org'}"></span>
+          <span style="font-weight:600;font-size:12px">${item.zone}</span>
+          <span class="risk-badge ${item.risk==='CRITICAL'?'risk-critical':'risk-high'}" style="font-size:10px">${item.risk}</span>
+        </div>
+        <p style="color:var(--muted);font-size:12px;margin-left:14px">${item.msg}</p>
+      </div>
+    `).join('');
+  }
+}
+
+/* ── EXPORT ── */
+function exportResults() {
+  if (!lastResultsData) return;
+  const blob = new Blob([JSON.stringify(lastResultsData, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `disaster_optimizer_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+/* ── UTILS ── */
+function showLoading(show) {
+  document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+}
+
+/* ── INIT ── */
+drawMap();
+checkStatus();
+</script>
+</body>
+</html>
