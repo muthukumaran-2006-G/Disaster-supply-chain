@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Disaster Supply Chain Optimizer</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --bg:       #0a0e1a;
+      --surface:  #111827;
+      --surface2: #0d1525;
+      --border:   #1e2d40;
+      --accent:   #f97316;
+      --accent2:  #3b82f6;
+      --success:  #22c55e;
+      --critical: #ef4444;
+      --high:     #f97316;
+      --medium:   #eab308;
+      --low:      #22c55e;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; min-height: 100vh; }
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    }
+    .display-font { font-family: 'Syne', sans-serif; }
+
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      border-bottom: 1px solid var(--border); position: relative; overflow: hidden;
+    }
+    header::after {
+      content: ''; position: absolute; top: -50%; right: -10%; width: 40%; height: 200%;
+      background: radial-gradient(ellipse, rgba(249,115,22,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; position: relative; z-index: 1; }
+    .card-accent { border-top: 3px solid var(--accent); }
+    .card-blue   { border-top: 3px solid var(--accent2); }
+    .card-green  { border-top: 3px solid var(--success); }
+
+    input, select, textarea {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 9px 12px; width: 100%; outline: none;
+      transition: border-color .2s, box-shadow .2s; font-family: 'DM Sans', sans-serif; font-size: 13px;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+    label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+
+    .btn {
+      border: none; border-radius: 8px; padding: 10px 20px; font-weight: 600;
+      cursor: pointer; transition: all .2s; font-family: 'DM Sans', sans-serif; font-size: 13px;
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+    .btn-primary  { background: var(--accent);  color: white; }
+    .btn-primary:hover  { background: #ea6c0a; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(249,115,22,.3); }
+    .btn-blue     { background: var(--accent2); color: white; }
+    .btn-blue:hover     { background: #2563eb;  transform: translateY(-1px); }
+    .btn-green    { background: var(--success);  color: white; }
+    .btn-green:hover    { background: #16a34a;  transform: translateY(-1px); }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent2); color: #93c5fd; }
+    .btn-danger   { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.25); border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; transition: all .2s; }
+    .btn-danger:hover   { background: rgba(239,68,68,.22); }
+    .btn-optimize { background: linear-gradient(135deg, #7c3aed, #2563eb); color: white; }
+    .btn-optimize:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(124,58,237,.35); }
+
+    .tab-btn { padding: 8px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); transition: all .2s; color: var(--muted); background: transparent; }
+    .tab-btn.active { background: var(--accent2); color: white; border-color: var(--accent2); }
+
+    .risk-badge { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+    .risk-CRITICAL { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .risk-HIGH     { background: rgba(249,115,22,.15); color: #fb923c; border: 1px solid rgba(249,115,22,.3); }
+    .risk-MEDIUM   { background: rgba(234,179,8,.15);  color: #facc15; border: 1px solid rgba(234,179,8,.3); }
+    .risk-LOW      { background: rgba(34,197,94,.15);  color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; position: relative; overflow: hidden; }
+    .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .stat-c1::before { background: linear-gradient(90deg,#ef4444,#f97316); }
+    .stat-c2::before { background: linear-gradient(90deg,#f97316,#eab308); }
+    .stat-c3::before { background: linear-gradient(90deg,#3b82f6,#8b5cf6); }
+    .stat-c4::before { background: linear-gradient(90deg,#22c55e,#14b8a6); }
+
+    #leafletMap { height: 360px; width: 100%; border-radius: 10px; border: 1px solid var(--border); z-index: 1; }
+    .leaflet-container { background: #0d1525 !important; font-family: 'DM Sans', sans-serif; }
+    .leaflet-popup-content-wrapper { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; }
+    .leaflet-popup-tip { background: var(--surface); }
+
+    .ai-box { background: linear-gradient(135deg, rgba(59,130,246,.07), rgba(139,92,246,.07)); border: 1px solid rgba(59,130,246,.2); border-radius: 12px; padding: 22px; position: relative; }
+    .ai-box::before { content: '✦ AI RECOMMENDATIONS'; position: absolute; top: -11px; left: 20px; background: linear-gradient(135deg,#3b82f6,#8b5cf6); color: white; font-size: 10px; font-weight: 700; padding: 3px 12px; border-radius: 999px; letter-spacing: 1px; }
+    .ai-line { border-left: 3px solid #3b82f6; padding-left: 12px; margin: 9px 0; line-height: 1.65; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+    td { padding: 13px 14px; border-bottom: 1px solid rgba(30,45,64,.4); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.018); }
+
+    .prog-bar { height: 5px; border-radius: 3px; background: #1e2d40; overflow: hidden; margin-top: 5px; }
+    .prog-fill { height: 100%; border-radius: 3px; transition: width .6s; }
+
+    #toast { position: fixed; bottom: 28px; right: 28px; z-index: 9999; transition: all .35s; transform: translateY(80px); opacity: 0; pointer-events: none; }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    .toast-inner { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-radius: 10px; font-weight: 600; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    .toast-ok   { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
+    .toast-err  { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+    .toast-info { background: #1e3a5f; color: #93c5fd; border: 1px solid #1d4ed8; }
+
+    .db-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
+    .db-on  { background: rgba(34,197,94,.12); color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+    .db-off { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .pulse { width: 7px; height: 7px; border-radius: 50%; animation: pulse 1.8s infinite; }
+    .pulse-green { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+    .pulse-red   { background: #f87171; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: #2a3a50; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HEADER ══════════════════════════════════ -->
+<header class="px-6 py-5">
+  <div class="max-w-screen-2xl mx-auto flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <h1 class="display-font text-2xl font-extrabold tracking-tight">
+        <span style="color:var(--accent)">⚡</span> AI Disaster Supply Chain Optimizer
+      </h1>
+      <p class="text-xs mt-1" style="color:var(--muted)">Full-Stack Edition · MySQL + Flask + Leaflet</p>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <div id="dbBadge" class="db-badge db-off"><span class="pulse pulse-red"></span>Connecting…</div>
+      <div id="aiBadge" class="db-badge" style="background:rgba(139,92,246,.12);color:#c4b5fd;border:1px solid rgba(139,92,246,.3)">
+        <span>✦</span> <span id="aiLabel">AI</span>
+      </div>
+      <button class="btn btn-optimize" onclick="runOptimize()">🚀 Run Optimization</button>
+      <button class="btn btn-secondary" onclick="exportData()">📥 Export JSON</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═════════════════════════════ STATS BAR ═════════════════════════════════ -->
+<div class="max-w-screen-2xl mx-auto px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4" id="statsBar">
+  <div class="stat-card stat-c1"><div class="text-xs font-semibold" style="color:var(--muted)">AFFECTED ZONES</div><div class="text-2xl font-bold mt-1" id="statZones">—</div></div>
+  <div class="stat-card stat-c2"><div class="text-xs font-semibold" style="color:var(--muted)">TOTAL POPULATION</div><div class="text-2xl font-bold mt-1" id="statPop">—</div></div>
+  <div class="stat-card stat-c3"><div class="text-xs font-semibold" style="color:var(--muted)">SUPPLY RECORDS</div><div class="text-2xl font-bold mt-1" id="statSup">—</div></div>
+  <div class="stat-card stat-c4"><div class="text-xs font-semibold" style="color:var(--muted)">ACTIVE DEPOTS</div><div class="text-2xl font-bold mt-1" id="statDepots">—</div></div>
+</div>
+
+<!-- ══════════════════════════ MAIN CONTENT GRID ════════════════════════════ -->
+<div class="max-w-screen-2xl mx-auto px-6 pb-10 grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+  <!-- ─── LEFT COLUMN (data entry) ─────────────────────────────────────────── -->
+  <div class="xl:col-span-1 flex flex-col gap-5">
+
+    <!-- Tab switcher -->
+    <div class="flex gap-2" style="z-index:1;position:relative">
+      <button class="tab-btn active" id="tabZoneBtn"   onclick="switchTab('zone')">🗺 Zones</button>
+      <button class="tab-btn"        id="tabDepotBtn"  onclick="switchTab('depot')">🏭 Depots</button>
+      <button class="tab-btn"        id="tabSupplyBtn" onclick="switchTab('supply')">📦 Supplies</button>
+    </div>
+
+    <!-- ── ADD ZONE ── -->
+    <div class="card card-accent p-5" id="panelZone">
+      <div class="section-title">Add Affected Zone</div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2"><label>Zone Name</label><input id="z_name" placeholder="e.g. Chennai Coastal Zone" /></div>
+        <div><label>Population</label><input id="z_pop" type="number" placeholder="45000" /></div>
+        <div><label>Severity (1–10)</label><input id="z_sev" type="number" min="1" max="10" placeholder="8" /></div>
+        <div><label>Latitude</label><input id="z_lat" type="number" step="any" placeholder="13.0827" /></div>
+        <div><label>Longitude</label><input id="z_lng" type="number" step="any" placeholder="80.2707" /></div>
+        <div class="col-span-2 text-xs" style="color:var(--muted)">💡 Click on the map to auto-fill lat/lng</div>
+      </div>
+      <button class="btn btn-primary mt-4 w-full" onclick="addZone()">+ Add Zone to Database</button>
+    </div>
+
+    <!-- ── ADD DEPOT ── -->
+    <div class="card card-blue p-5 hidden" id="panelDepot">
+      <div class="section-title">Add Supply Depot</div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2"><label>Depot Name</label><input id="d_name" placeholder="e.g. Depot Alpha — Chennai" /></div>
+        <div class="col-span-2"><label>Location Description</label><input id="d_loc" placeholder="North Hub" /></div>
+        <div><label>Latitude</label><input id="d_lat" type="number" step="any" placeholder="13.1500" /></div>
+        <div><label>Longitude</label><input id="d_lng" type="number" step="any" placeholder="80.2800" /></div>
+        <div class="col-span-2"><label>Capacity (units)</label><input id="d_cap" type="number" placeholder="100000" /></div>
+      </div>
+      <button class="btn btn-blue mt-4 w-full" onclick="addDepot()">+ Add Depot to Database</button>
+    </div>
+
+    <!-- ── ADD SUPPLY ── -->
+    <div class="card card-green p-5 hidden" id="panelSupply">
+      <div class="section-title">Add Supply Record</div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label>Supply Type</label>
+          <select id="s_type">
+            <option value="food">Food</option>
+            <option value="water">Water</option>
+            <option value="medicines">Medicines</option>
+            <option value="tarpaulins">Tarpaulins</option>
+            <option value="blankets">Blankets</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div><label>Unit</label>
+          <select id="s_unit">
+            <option value="kg">kg</option>
+            <option value="liters">liters</option>
+            <option value="units">units</option>
+            <option value="tonnes">tonnes</option>
+          </select>
+        </div>
+        <div class="col-span-2"><label>Quantity</label><input id="s_qty" type="number" placeholder="500000" /></div>
+        <div class="col-span-2"><label>Assign to Depot</label>
+          <select id="s_depot"><option value="">— Unassigned —</option></select>
+        </div>
+        <div class="col-span-2"><label>Notes</label><input id="s_notes" placeholder="Optional notes" /></div>
+      </div>
+      <button class="btn btn-green mt-4 w-full" onclick="addSupply()">+ Add Supply to Database</button>
+    </div>
+
+    <!-- ── MAP ── -->
+    <div class="card p-4">
+      <div class="section-title">Interactive Map <span style="font-size:10px;color:var(--muted)">(click to set lat/lng)</span></div>
+      <div id="leafletMap"></div>
+      <div class="flex gap-3 mt-3 text-xs" style="color:var(--muted)">
+        <span>🔴 Critical &nbsp; 🟠 High &nbsp; 🟡 Medium &nbsp; 🟢 Low &nbsp; 🔵 Depot</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── MIDDLE + RIGHT COLUMNS ────────────────────────────────────────────── -->
+  <div class="xl:col-span-2 flex flex-col gap-5">
+
+    <!-- ── CURRENT DB RECORDS ── -->
+    <div class="card p-5">
+      <div class="section-title">Database Records</div>
+
+      <!-- Inner tabs -->
+      <div class="flex gap-2 mb-4">
+        <button class="tab-btn active text-xs" id="rtabZones"   onclick="switchRecordTab('zones')">Zones</button>
+        <button class="tab-btn text-xs"        id="rtabDepots"  onclick="switchRecordTab('depots')">Depots</button>
+        <button class="tab-btn text-xs"        id="rtabSupplies"onclick="switchRecordTab('supplies')">Supplies</button>
+      </div>
+
+      <!-- Zone records -->
+      <div id="recZones">
+        <div class="overflow-x-auto">
+          <table>
+            <thead><tr><th>Zone</th><th>Population</th><th>Severity</th><th>Lat / Lng</th><th></th></tr></thead>
+            <tbody id="zoneTableBody"><tr><td colspan="5" class="empty-state"><div class="icon">🗺</div>No zones yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Depot records -->
+      <div id="recDepots" class="hidden">
+        <div class="overflow-x-auto">
+          <table>
+            <thead><tr><th>Depot</th><th>Location</th><th>Capacity</th><th>Lat / Lng</th><th></th></tr></thead>
+            <tbody id="depotTableBody"><tr><td colspan="5" class="empty-state"><div class="icon">🏭</div>No depots yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Supply records -->
+      <div id="recSupplies" class="hidden">
+        <div class="overflow-x-auto">
+          <table>
+            <thead><tr><th>Type</th><th>Quantity</th><th>Unit</th><th>Depot</th><th>Notes</th><th></th></tr></thead>
+            <tbody id="supplyTableBody"><tr><td colspan="6" class="empty-state"><div class="icon">📦</div>No supplies yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── OPTIMIZATION RESULTS ── -->
+    <div id="resultsSection" class="hidden flex flex-col gap-5">
+
+      <!-- Summary cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="resultSummary"></div>
+
+      <!-- Allocation table -->
+      <div class="card p-5">
+        <div class="section-title">Supply Allocation by Zone</div>
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Zone</th><th>Population</th><th>Food (kg)</th>
+                <th>Water (L)</th><th>Medicines</th><th>Risk</th><th>Alerts</th>
+              </tr>
+            </thead>
+            <tbody id="allocTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Routes table -->
+      <div class="card p-5">
+        <div class="section-title">Nearest-Depot Route Plan</div>
+        <div class="overflow-x-auto">
+          <table>
+            <thead><tr><th>Zone</th><th>Depot</th><th>Distance (km)</th><th>Est. Time (hrs)</th><th>Progress</th></tr></thead>
+            <tbody id="routeTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AI box -->
+      <div class="ai-box" id="aiBox"></div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ TOAST ═══════════════════════════════════ -->
+<div id="toast"><div class="toast-inner" id="toastInner"></div></div>
+
+<!-- ══════════════════════════════ SCRIPTS ══════════════════════════════════ -->
+<script>
+/* ─── State ─────────────────────────────────────────────────────────────── */
+let leafletMap = null;
+let mapMarkers = [];
+let clickLat   = null;
+let clickLng   = null;
+let depotList  = [];
+
+/* ─── Init ──────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  initMap();
+  loadStatus();
+  loadAll();
+});
+
+/* ─── Map ───────────────────────────────────────────────────────────────── */
+function initMap() {
+  leafletMap = L.map('leafletMap').setView([13.08, 80.27], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    className: 'map-tiles'
+  }).addTo(leafletMap);
+
+  leafletMap.on('click', e => {
+    clickLat = e.latlng.lat.toFixed(6);
+    clickLng = e.latlng.lng.toFixed(6);
+    const activeTab = document.querySelector('.tab-btn.active').id;
+    if (activeTab === 'tabZoneBtn' || activeTab === 'tabZoneBtn') {
+      document.getElementById('z_lat').value = clickLat;
+      document.getElementById('z_lng').value = clickLng;
+    }
+    if (activeTab === 'tabDepotBtn') {
+      document.getElementById('d_lat').value = clickLat;
+      document.getElementById('d_lng').value = clickLng;
+    }
+    showToast(`📍 Lat ${clickLat}, Lng ${clickLng} captured`, 'info');
+  });
+}
+
+function refreshMap(zones, depots, allocations) {
+  mapMarkers.forEach(m => leafletMap.removeLayer(m));
+  mapMarkers = [];
+
+  const riskColor = { CRITICAL:'#ef4444', HIGH:'#f97316', MEDIUM:'#eab308', LOW:'#22c55e' };
+
+  zones.forEach((z, i) => {
+    const alloc = allocations ? allocations.find(a => a.zone === z.name) : null;
+    const color = alloc ? (riskColor[alloc.risk_level] || '#94a3b8') : '#3b82f6';
+    const lat = parseFloat(z.latitude || z.lat);
+    const lng = parseFloat(z.longitude || z.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:14px;height:14px;background:${color};border:2px solid rgba(255,255,255,.6);border-radius:50%;box-shadow:0 0 8px ${color}aa"></div>`,
+      iconSize: [14,14], iconAnchor: [7,7]
+    });
+    const marker = L.marker([lat, lng], { icon })
+      .addTo(leafletMap)
+      .bindPopup(`<b>${z.name}</b><br>Pop: ${Number(z.population).toLocaleString()}<br>Severity: ${z.severity}` +
+        (alloc ? `<br><b style="color:${color}">Risk: ${alloc.risk_level}</b>` : ''));
+    mapMarkers.push(marker);
+  });
+
+  (depots||[]).forEach(dp => {
+    const lat = parseFloat(dp.latitude || dp.lat);
+    const lng = parseFloat(dp.longitude || dp.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:16px;height:16px;background:#3b82f6;border:2px solid rgba(255,255,255,.7);border-radius:3px;box-shadow:0 0 8px #3b82f6aa"></div>`,
+      iconSize: [16,16], iconAnchor: [8,8]
+    });
+    const marker = L.marker([lat, lng], { icon })
+      .addTo(leafletMap)
+      .bindPopup(`<b>🏭 ${dp.name}</b><br>${dp.location || ''}`);
+    mapMarkers.push(marker);
+  });
+
+  if (mapMarkers.length) {
+    const group = L.featureGroup(mapMarkers);
+    leafletMap.fitBounds(group.getBounds().pad(0.15));
+  }
+}
+
+/* ─── Status ────────────────────────────────────────────────────────────── */
+async function loadStatus() {
+  try {
+    const r  = await fetch('/api/status');
+    const d  = await r.json();
+    const b  = document.getElementById('dbBadge');
+    if (d.database) {
+      b.className = 'db-badge db-on';
+      b.innerHTML = `<span class="pulse pulse-green"></span>MySQL: ${d.db_name}`;
+    } else {
+      b.className = 'db-badge db-off';
+      b.innerHTML = `<span class="pulse pulse-red"></span>DB Offline`;
+    }
+    document.getElementById('aiLabel').textContent = d.ai_enabled ? 'AI: Mistral-7B' : 'AI: Rule-Based';
+  } catch(e) {}
+}
+
+/* ─── Load all data ─────────────────────────────────────────────────────── */
+async function loadAll() {
+  await Promise.all([loadZones(), loadDepots(), loadSupplies(), loadDashboard()]);
+}
+
+async function loadDashboard() {
+  try {
+    const r = await fetch('/api/dashboard');
+    const d = await r.json();
+    document.getElementById('statZones').textContent  = d.zones;
+    document.getElementById('statPop').textContent    = fmtNum(d.total_population);
+    document.getElementById('statSup').textContent    = d.supply_records;
+    document.getElementById('statDepots').textContent = d.depots;
+  } catch(e) {}
+}
+
+async function loadZones() {
+  try {
+    const r    = await fetch('/api/zones');
+    const data = await r.json();
+    const tb   = document.getElementById('zoneTableBody');
+    if (!data.length) { tb.innerHTML = `<tr><td colspan="5" class="empty-state"><div class="icon">🗺</div>No zones yet — add one using the form.</td></tr>`; return; }
+    tb.innerHTML = data.map(z => `
+      <tr>
+        <td><div class="font-semibold">${z.name}</div></td>
+        <td>${Number(z.population).toLocaleString()}</td>
+        <td>
+          <div class="flex items-center gap-2">
+            <span class="font-bold" style="color:${sevColor(z.severity)}">${z.severity}/10</span>
+            <div class="prog-bar" style="width:60px"><div class="prog-fill" style="width:${z.severity*10}%;background:${sevColor(z.severity)}"></div></div>
+          </div>
+        </td>
+        <td class="text-xs" style="color:var(--muted)">${parseFloat(z.latitude).toFixed(4)}, ${parseFloat(z.longitude).toFixed(4)}</td>
+        <td><button class="btn-danger" onclick="deleteZone(${z.id})">✕ Delete</button></td>
+      </tr>`).join('');
+    refreshMap(data, depotList, null);
+  } catch(e) {}
+}
+
+async function loadDepots() {
+  try {
+    const r    = await fetch('/api/depots');
+    depotList  = await r.json();
+    const tb   = document.getElementById('depotTableBody');
+    const sel  = document.getElementById('s_depot');
+    if (!depotList.length) {
+      tb.innerHTML = `<tr><td colspan="5" class="empty-state"><div class="icon">🏭</div>No depots yet.</td></tr>`;
+      sel.innerHTML = `<option value="">— No depots available —</option>`;
+      return;
+    }
+    tb.innerHTML = depotList.map(dp => `
+      <tr>
+        <td><div class="font-semibold">${dp.name}</div></td>
+        <td style="color:var(--muted)">${dp.location || '—'}</td>
+        <td>${Number(dp.capacity).toLocaleString()}</td>
+        <td class="text-xs" style="color:var(--muted)">${parseFloat(dp.latitude).toFixed(4)}, ${parseFloat(dp.longitude).toFixed(4)}</td>
+        <td><button class="btn-danger" onclick="deleteDepot(${dp.id})">✕ Delete</button></td>
+      </tr>`).join('');
+    sel.innerHTML = `<option value="">— Unassigned —</option>` + depotList.map(dp => `<option value="${dp.id}">${dp.name}</option>`).join('');
+  } catch(e) {}
+}
+
+async function loadSupplies() {
+  try {
+    const r    = await fetch('/api/supplies');
+    const data = await r.json();
+    const tb   = document.getElementById('supplyTableBody');
+    if (!data.length) { tb.innerHTML = `<tr><td colspan="6" class="empty-state"><div class="icon">📦</div>No supplies yet.</td></tr>`; return; }
+    tb.innerHTML = data.map(s => `
+      <tr>
+        <td><span class="risk-badge" style="background:rgba(249,115,22,.12);color:#fb923c;border:1px solid rgba(249,115,22,.25)">${s.supply_type}</span></td>
+        <td class="font-semibold">${Number(s.quantity).toLocaleString()}</td>
+        <td style="color:var(--muted)">${s.unit}</td>
+        <td style="color:var(--muted)">${s.depot_name || '—'}</td>
+        <td style="color:var(--muted);font-size:12px">${(s.notes||'').slice(0,40)}</td>
+        <td><button class="btn-danger" onclick="deleteSupply(${s.id})">✕ Delete</button></td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+/* ─── ADD operations ────────────────────────────────────────────────────── */
+async function addZone() {
+  const body = {
+    name:      val('z_name'),
+    population:val('z_pop'),
+    severity:  val('z_sev'),
+    latitude:  val('z_lat'),
+    longitude: val('z_lng'),
+  };
+  if (!body.name || !body.population || !body.severity || !body.latitude || !body.longitude) {
+    return showToast('Please fill all zone fields', 'err');
+  }
+  const r = await postJSON('/api/zones', body);
+  if (r.error) return showToast(r.error, 'err');
+  showToast(`Zone "${body.name}" added ✓`, 'ok');
+  clearInputs(['z_name','z_pop','z_sev','z_lat','z_lng']);
+  loadAll();
+}
+
+async function addDepot() {
+  const body = {
+    name:     val('d_name'),
+    location: val('d_loc'),
+    latitude: val('d_lat'),
+    longitude:val('d_lng'),
+    capacity: val('d_cap') || 100000,
+  };
+  if (!body.name || !body.latitude || !body.longitude) return showToast('Fill name + coordinates', 'err');
+  const r = await postJSON('/api/depots', body);
+  if (r.error) return showToast(r.error, 'err');
+  showToast(`Depot "${body.name}" added ✓`, 'ok');
+  clearInputs(['d_name','d_loc','d_lat','d_lng','d_cap']);
+  loadAll();
+}
+
+async function addSupply() {
+  const body = {
+    supply_type: document.getElementById('s_type').value,
+    quantity:    val('s_qty'),
+    unit:        document.getElementById('s_unit').value,
+    depot_id:    document.getElementById('s_depot').value || null,
+    notes:       val('s_notes'),
+  };
+  if (!body.quantity) return showToast('Enter a quantity', 'err');
+  const r = await postJSON('/api/supplies', body);
+  if (r.error) return showToast(r.error, 'err');
+  showToast(`${body.supply_type} × ${Number(body.quantity).toLocaleString()} ${body.unit} added ✓`, 'ok');
+  clearInputs(['s_qty','s_notes']);
+  loadAll();
+}
+
+/* ─── DELETE operations ─────────────────────────────────────────────────── */
+async function deleteZone(id) {
+  if (!confirm('Delete this zone?')) return;
+  await fetch(`/api/zones/${id}`, { method:'DELETE' });
+  showToast('Zone deleted', 'ok'); loadAll();
+}
+async function deleteDepot(id) {
+  if (!confirm('Delete this depot?')) return;
+  await fetch(`/api/depots/${id}`, { method:'DELETE' });
+  showToast('Depot deleted', 'ok'); loadAll();
+}
+async function deleteSupply(id) {
+  if (!confirm('Delete this supply?')) return;
+  await fetch(`/api/supplies/${id}`, { method:'DELETE' });
+  showToast('Supply deleted', 'ok'); loadAll();
+}
+
+/* ─── OPTIMIZE ──────────────────────────────────────────────────────────── */
+async function runOptimize() {
+  showToast('Running optimization…', 'info');
+  try {
+    const r    = await fetch('/api/optimize', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const data = await r.json();
+    if (data.error) return showToast(data.error, 'err');
+    renderResults(data);
+    // refresh map with risk colors
+    const zones  = await (await fetch('/api/zones')).json();
+    const depots = await (await fetch('/api/depots')).json();
+    refreshMap(zones, depots, data.allocations);
+    showToast('Optimization complete ✓', 'ok');
+  } catch(e) {
+    showToast('Optimization failed: ' + e.message, 'err');
+  }
+}
+
+function renderResults(data) {
+  const { allocations, routes, suggestions, summary } = data;
+
+  // Summary cards
+  document.getElementById('resultSummary').innerHTML = `
+    <div class="stat-card stat-c1"><div class="text-xs font-semibold" style="color:var(--muted)">TOTAL ZONES</div><div class="text-2xl font-bold mt-1">${summary.total_zones}</div></div>
+    <div class="stat-card stat-c2"><div class="text-xs font-semibold" style="color:var(--muted)">CRITICAL ZONES</div><div class="text-2xl font-bold mt-1" style="color:#ef4444">${summary.critical_zones}</div></div>
+    <div class="stat-card stat-c3"><div class="text-xs font-semibold" style="color:var(--muted)">HIGH-RISK ZONES</div><div class="text-2xl font-bold mt-1" style="color:#f97316">${summary.high_risk_zones}</div></div>
+    <div class="stat-card stat-c4"><div class="text-xs font-semibold" style="color:var(--muted)">TOTAL SUPPLY GAP</div><div class="text-2xl font-bold mt-1">${fmtNum(summary.total_supply_gap)}</div></div>`;
+
+  // Allocations
+  document.getElementById('allocTableBody').innerHTML = allocations.map(a => `
+    <tr>
+      <td><div class="font-semibold text-sm">${a.zone}</div><div class="text-xs" style="color:var(--muted)">Sev ${a.severity}</div></td>
+      <td>${Number(a.population).toLocaleString()}</td>
+      <td>
+        <div class="font-semibold text-sm">${fmtNum(a.food_alloc)}</div>
+        ${a.food_gap ? `<div class="text-xs" style="color:#f87171">−${fmtNum(a.food_gap)} gap</div>` : ''}
+      </td>
+      <td>
+        <div class="font-semibold text-sm">${fmtNum(a.water_alloc)}</div>
+        ${a.water_gap ? `<div class="text-xs" style="color:#f87171">−${fmtNum(a.water_gap)} gap</div>` : ''}
+      </td>
+      <td>
+        <div class="font-semibold text-sm">${fmtNum(a.meds_alloc)}</div>
+        ${a.meds_gap ? `<div class="text-xs" style="color:#f87171">−${fmtNum(a.meds_gap)} gap</div>` : ''}
+      </td>
+      <td><span class="risk-badge risk-${a.risk_level}">${a.risk_level}</span></td>
+      <td class="text-xs" style="color:#f87171">${a.alerts.join('<br>')}</td>
+    </tr>`).join('');
+
+  // Routes
+  document.getElementById('routeTableBody').innerHTML = routes.map(r => {
+    const pct = Math.min(100, r.estimated_hours / 8 * 100);
+    return `
+    <tr>
+      <td class="font-semibold text-sm">${r.zone}</td>
+      <td style="color:var(--accent2)">${r.depot}</td>
+      <td>${r.distance_km} km</td>
+      <td>${r.estimated_hours} hrs</td>
+      <td><div class="prog-bar" style="width:120px"><div class="prog-fill" style="width:${pct}%;background:${pct>75?'#ef4444':pct>40?'#f97316':'#22c55e'}"></div></div></td>
+    </tr>`}).join('');
+
+  // AI
+  const lines = suggestions.text.split('\n').filter(Boolean);
+  document.getElementById('aiBox').innerHTML =
+    `<div class="text-xs font-semibold mb-3" style="color:var(--muted)">${suggestions.source}</div>` +
+    lines.map(l => `<div class="ai-line text-sm">${l}</div>`).join('');
+
+  document.getElementById('resultsSection').classList.remove('hidden');
+  document.getElementById('resultsSection').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+/* ─── Export ────────────────────────────────────────────────────────────── */
+async function exportData() {
+  try {
+    const r   = await fetch('/api/export');
+    const data= await r.json();
+    const blob= new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href    = url;
+    a.download= `disaster_optimizer_export_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Export downloaded ✓', 'ok');
+  } catch(e) {
+    showToast('Export failed', 'err');
+  }
+}
+
+/* ─── Tab switching ─────────────────────────────────────────────────────── */
+function switchTab(tab) {
+  ['zone','depot','supply'].forEach(t => {
+    document.getElementById(`panel${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.toggle('hidden', t !== tab);
+    document.getElementById(`tab${t.charAt(0).toUpperCase()+t.slice(1)}Btn`).classList.toggle('active', t === tab);
+  });
+}
+
+function switchRecordTab(tab) {
+  ['Zones','Depots','Supplies'].forEach(t => {
+    const key = t.toLowerCase();
+    document.getElementById(`rec${t}`).classList.toggle('hidden', key !== tab);
+    document.getElementById(`rtab${t}`).classList.toggle('active', key === tab);
+  });
+}
+
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
+const val = id => document.getElementById(id).value.trim();
+const fmtNum = n => Number(n || 0).toLocaleString();
+const sevColor = s => s >= 8 ? '#ef4444' : s >= 6 ? '#f97316' : s >= 4 ? '#eab308' : '#22c55e';
+
+function clearInputs(ids) { ids.forEach(id => document.getElementById(id).value = ''); }
+
+async function postJSON(url, body) {
+  try {
+    const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    return await r.json();
+  } catch(e) { return { error: e.message }; }
+}
+
+let toastTimer;
+function showToast(msg, type='ok') {
+  const toast = document.getElementById('toast');
+  const inner = document.getElementById('toastInner');
+  const icons = { ok:'✅', err:'❌', info:'ℹ️' };
+  inner.className = `toast-inner toast-${type}`;
+  inner.textContent = `${icons[type]||''} ${msg}`;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
