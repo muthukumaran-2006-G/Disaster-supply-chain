@@ -9,7 +9,9 @@ from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 import json, math, os, requests
 from datetime import datetime
-
+from flask_cors import CORS
+app=Flask(__name__)
+CORS(app)
 # ─── Load environment variables ────────────────────────────────────────────────
 load_dotenv()  # FIX: moved to top before any os.environ.get() calls
 
