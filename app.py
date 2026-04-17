@@ -9,9 +9,7 @@ from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 import json, math, os, requests
 from datetime import datetime
-from flask_cors import CORS
-app=Flask(__name__)
-CORS(app,orgins=["https://disaster-supply-chain-ni9q-1bg2oy6lx.vercel.app"])
+
 # ─── Load environment variables ────────────────────────────────────────────────
 load_dotenv()  # FIX: moved to top before any os.environ.get() calls
 
@@ -37,14 +35,20 @@ if missing_vars:
 
 DATABASE_URL = (
     os.environ.get("DATABASE_URL")
-    or f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT or 3306}/{DB_NAME}"  # FIX: DB_PORT or 3306
+    or f"mysql://avnadmin:AVNS_hG1x5WpViYL3fmTGxXG@mysql-154a09fc-muthu2k6kumaran-1b6e.d.aivencloud.com:18673/defaultdb?ssl-mode=REQUIRED"
 )
+
+# Aiven MySQL requires SSL — add ssl_disabled=False via connect_args
+connect_args = {}
+if "aivencloud.com" in (DATABASE_URL or ""):
+    connect_args = {"ssl": {"ssl_disabled": False}}
 
 app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = {
-    "pool_pre_ping": True,
-    "pool_recycle":  3600,
+    "pool_pre_ping":  True,
+    "pool_recycle":   3600,
+    "connect_args":   connect_args,
 }
 
 db = SQLAlchemy(app)
@@ -521,4 +525,6 @@ def optimize():
 # ══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    app.run(debug=True)  # FIX: was missing entirely
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_ENV", "production") == "development"
+    app.run(host="0.0.0.0", port=port, debug=debug)
