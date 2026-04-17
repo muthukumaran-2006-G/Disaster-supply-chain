@@ -349,12 +349,22 @@ let clickLat   = null;
 let clickLng   = null;
 let depotList  = [];
 
+// API base URL for hosted backend
+const API_BASE = 'https://disaster-supply-chain-1.onrender.com';
+
 /* ─── Init ──────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
   loadStatus();
   loadAll();
 });
+
+// Remove test fetches
+// fetch("https://disaster-supply-chain-1.onrender.com/api/data")
+// .then(res=>res.json())
+// .then(data=>console.log(data))
+
+// fetch(`$ {import.meta.env.VITE_API_URL}/api/data`)
 
 /* ─── Map ───────────────────────────────────────────────────────────────── */
 function initMap() {
@@ -429,7 +439,7 @@ function refreshMap(zones, depots, allocations) {
 /* ─── Status ────────────────────────────────────────────────────────────── */
 async function loadStatus() {
   try {
-    const r  = await fetch('/api/status');
+    const r  = await fetch(`${API_BASE}/api/status`);
     const d  = await r.json();
     const b  = document.getElementById('dbBadge');
     if (d.database) {
@@ -450,7 +460,7 @@ async function loadAll() {
 
 async function loadDashboard() {
   try {
-    const r = await fetch('/api/dashboard');
+    const r = await fetch(`${API_BASE}/api/dashboard`);
     const d = await r.json();
     document.getElementById('statZones').textContent  = d.zones;
     document.getElementById('statPop').textContent    = fmtNum(d.total_population);
@@ -461,7 +471,7 @@ async function loadDashboard() {
 
 async function loadZones() {
   try {
-    const r    = await fetch('/api/zones');
+    const r    = await fetch(`${API_BASE}/api/zones`);
     const data = await r.json();
     const tb   = document.getElementById('zoneTableBody');
     if (!data.length) { tb.innerHTML = `<tr><td colspan="5" class="empty-state"><div class="icon">🗺</div>No zones yet — add one using the form.</td></tr>`; return; }
@@ -484,7 +494,7 @@ async function loadZones() {
 
 async function loadDepots() {
   try {
-    const r    = await fetch('/api/depots');
+    const r    = await fetch(`${API_BASE}/api/depots`);
     depotList  = await r.json();
     const tb   = document.getElementById('depotTableBody');
     const sel  = document.getElementById('s_depot');
@@ -507,7 +517,7 @@ async function loadDepots() {
 
 async function loadSupplies() {
   try {
-    const r    = await fetch('/api/supplies');
+    const r    = await fetch(`${API_BASE}/api/supplies`);
     const data = await r.json();
     const tb   = document.getElementById('supplyTableBody');
     if (!data.length) { tb.innerHTML = `<tr><td colspan="6" class="empty-state"><div class="icon">📦</div>No supplies yet.</td></tr>`; return; }
@@ -535,7 +545,7 @@ async function addZone() {
   if (!body.name || !body.population || !body.severity || !body.latitude || !body.longitude) {
     return showToast('Please fill all zone fields', 'err');
   }
-  const r = await postJSON('/api/zones', body);
+  const r = await postJSON(`${API_BASE}/api/zones`, body);
   if (r.error) return showToast(r.error, 'err');
   showToast(`Zone "${body.name}" added ✓`, 'ok');
   clearInputs(['z_name','z_pop','z_sev','z_lat','z_lng']);
@@ -551,7 +561,7 @@ async function addDepot() {
     capacity: val('d_cap') || 100000,
   };
   if (!body.name || !body.latitude || !body.longitude) return showToast('Fill name + coordinates', 'err');
-  const r = await postJSON('/api/depots', body);
+  const r = await postJSON(`${API_BASE}/api/depots`, body);
   if (r.error) return showToast(r.error, 'err');
   showToast(`Depot "${body.name}" added ✓`, 'ok');
   clearInputs(['d_name','d_loc','d_lat','d_lng','d_cap']);
@@ -567,7 +577,7 @@ async function addSupply() {
     notes:       val('s_notes'),
   };
   if (!body.quantity) return showToast('Enter a quantity', 'err');
-  const r = await postJSON('/api/supplies', body);
+  const r = await postJSON(`${API_BASE}/api/supplies`, body);
   if (r.error) return showToast(r.error, 'err');
   showToast(`${body.supply_type} × ${Number(body.quantity).toLocaleString()} ${body.unit} added ✓`, 'ok');
   clearInputs(['s_qty','s_notes']);
@@ -577,17 +587,17 @@ async function addSupply() {
 /* ─── DELETE operations ─────────────────────────────────────────────────── */
 async function deleteZone(id) {
   if (!confirm('Delete this zone?')) return;
-  await fetch(`/api/zones/${id}`, { method:'DELETE' });
+  await fetch(`${API_BASE}/api/zones/${id}`, { method:'DELETE' });
   showToast('Zone deleted', 'ok'); loadAll();
 }
 async function deleteDepot(id) {
   if (!confirm('Delete this depot?')) return;
-  await fetch(`/api/depots/${id}`, { method:'DELETE' });
+  await fetch(`${API_BASE}/api/depots/${id}`, { method:'DELETE' });
   showToast('Depot deleted', 'ok'); loadAll();
 }
 async function deleteSupply(id) {
   if (!confirm('Delete this supply?')) return;
-  await fetch(`/api/supplies/${id}`, { method:'DELETE' });
+  await fetch(`${API_BASE}/api/supplies/${id}`, { method:'DELETE' });
   showToast('Supply deleted', 'ok'); loadAll();
 }
 
@@ -595,13 +605,13 @@ async function deleteSupply(id) {
 async function runOptimize() {
   showToast('Running optimization…', 'info');
   try {
-    const r    = await fetch('/api/optimize', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const r    = await fetch(`${API_BASE}/api/optimize`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
     const data = await r.json();
     if (data.error) return showToast(data.error, 'err');
     renderResults(data);
     // refresh map with risk colors
-    const zones  = await (await fetch('/api/zones')).json();
-    const depots = await (await fetch('/api/depots')).json();
+    const zones  = await (await fetch(`${API_BASE}/api/zones`)).json();
+    const depots = await (await fetch(`${API_BASE}/api/depots`)).json();
     refreshMap(zones, depots, data.allocations);
     showToast('Optimization complete ✓', 'ok');
   } catch(e) {
@@ -665,7 +675,7 @@ function renderResults(data) {
 /* ─── Export ────────────────────────────────────────────────────────────── */
 async function exportData() {
   try {
-    const r   = await fetch('/api/export');
+    const r   = await fetch(`${API_BASE}/api/export`);
     const data= await r.json();
     const blob= new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
     const url = URL.createObjectURL(blob);
