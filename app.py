@@ -11,7 +11,7 @@ import json, math, os, requests
 from datetime import datetime
 from flask_cors import CORS
 app=Flask(__name__)
-CORS(app)
+CORS(app,orgins=["https://disaster-supply-chain-ni9q-1bg2oy6lx.vercel.app"])
 # ─── Load environment variables ────────────────────────────────────────────────
 load_dotenv()  # FIX: moved to top before any os.environ.get() calls
 
